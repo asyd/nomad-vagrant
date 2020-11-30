@@ -1,0 +1,11 @@
+[Unit]
+Description=Nomad agent
+
+[Service]
+ExecStart=/opt/nomad/bin/nomad agent -config=/etc/nomad
+Type=exec
+User=root
+Group=root
+
+[Install]
+WantedBy=default.target

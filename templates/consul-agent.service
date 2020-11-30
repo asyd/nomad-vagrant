@@ -1,0 +1,11 @@
+[Unit]
+Description=Consul agent
+
+[Service]
+ExecStart=/opt/consul/bin/consul agent -data-dir=/var/lib/consul -node=$HOSTNAME -bind 0.0.0.0 -config-dir=/etc/consul -retry-join 192.168.1.100
+Type=exec
+User=root
+Group=root
+
+[Install]
+WantedBy=default.target

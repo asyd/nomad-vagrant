@@ -1,0 +1,101 @@
+- hosts: haproxy
+  become: true
+  become_method: sudo
+  vars:
+    mode: docker
+
+  tasks:
+    - name: Install apt-python
+      raw: apt update && apt install -y python-apt
+
+    - name: Install required packages
+      apt:
+        pkg:
+          - wget
+          - unzip
+          - gnupg2
+          - apt-transport-https
+          - ca-certificates
+          - haproxy
+        state: present
+
+    - name: Ensure required directories
+      file:
+        path: "{{ nomad_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: 0755
+        recurse: yes
+      loop_control:
+        loop_var: nomad_dir
+      with_items:
+        - /etc/consul
+        - /opt/consul
+        - /opt/consul/bin
+        - /opt/consul/etc/templates
+
+    - name: Download and extract consul
+      shell: |
+        cd /opt/consul/bin
+        wget https://releases.hashicorp.com/consul/1.9.0/consul_1.9.0_linux_amd64.zip
+        unzip *.zip
+        rm -fr *.zip
+      args:
+        creates: /opt/consul/bin/consul
+
+    - name: Download and extract consul-template
+      shell: |
+        cd /opt/consul/bin
+        wget https://releases.hashicorp.com/consul-template/0.25.1/consul-template_0.25.1_linux_amd64.zip
+        unzip *.zip
+        rm -fr *.zip
+      args:
+        creates: /opt/consul/bin/consul-template
+
+    - name: Ensure files are executable
+      file:
+        path: "{{ nomad_binary }}"
+        owner: root
+        group: root
+        mode: 0755
+      with_items:
+        - /opt/consul/bin/consul
+        - /opt/consul/bin/consul-template
+      loop_control:
+        loop_var: nomad_binary
+
+    - name: Ensure consul service
+      template:
+        src: "templates/consul-template.service"
+        dest: "/etc/systemd/system/consul-template.service"
+        owner: root
+        group: root
+        mode: 0644
+      register: consul_service
+
+    - name: Reload systemd
+      shell: systemctl daemon-reload
+      when: consul_service.changed
+
+    - name: Ensure haproxy consul template
+      copy:
+        src: files/haproxy.cfg.tpl
+        dest: /opt/consul/etc/templates/haproxy.cfg.tpl
+        owner: root
+        group: root
+        mode: 0644
+
+    - name: Ensure consul template is running
+      service:
+        name: consul-template
+        state: started
+        enabled: yes
+      
+    - name: Ensure happroxy is running
+      service:
+        name: haproxy
+        state: started
+        enabled: yes
+
+

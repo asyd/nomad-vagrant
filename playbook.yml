@@ -1,0 +1,211 @@
+- hosts: ~node.*
+  become: true
+  become_method: sudo
+  vars:
+    mode: docker
+
+  tasks:
+    - name: Install apt-python
+      raw: apt update && apt install -y python-apt
+      changed_when: false
+
+    - name: Install required packages
+      apt:
+        pkg:
+          - wget
+          - unzip
+          - gnupg2
+          - apt-transport-https
+          - ca-certificates
+        state: present
+
+    - name: Ensure kernel module
+      modprobe:
+        name: bridge
+        state: present
+
+    - name: Ensure required directories
+      file:
+        path: "{{ nomad_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: 0755
+        recurse: yes
+      loop_control:
+        loop_var: nomad_dir
+      with_items:
+        - /opt/nomad/bin
+        - /opt/nomad/drivers
+        - /opt/consul/bin
+        - /opt/vault/bin
+        - /etc/vault
+        - /etc/nomad
+
+    - name: Download and extract consul
+      shell: |
+        cd /opt/consul/bin
+        wget https://releases.hashicorp.com/consul/1.9.0/consul_1.9.0_linux_amd64.zip
+        unzip *.zip
+        chmod 755 consul
+        rm -fr *.zip
+      args:
+        creates: /opt/consul/bin/consul
+
+    - name: Download and extract nomad
+      shell: |
+        cd /opt/nomad/bin
+        wget https://releases.hashicorp.com/nomad/0.12.9/nomad_0.12.9_linux_amd64.zip
+        unzip *.zip
+        chmod 755 nomad
+        rm -fr *.zip
+      args:
+        creates: /opt/nomad/bin/nomad
+
+    - name: Download and extract vault
+      shell: |
+        cd /opt/vault/bin
+        wget https://releases.hashicorp.com/vault/1.6.0/vault_1.6.0_linux_amd64.zip
+        unzip *.zip
+        chmod 755 vault
+        rm -fr *.zip
+      args:
+        creates: /opt/vault/bin/vault
+
+    - name: Download and extract podman plugin
+      shell: |
+        cd /opt/nomad/drivers
+        wget https://releases.hashicorp.com/nomad-driver-podman/0.1.0/nomad-driver-podman_0.1.0_linux_amd64.zip
+        unzip *.zip
+        chmod 755 nomad-driver-podman
+        rm -fr *.zip
+      args:
+        creates: /opt/nomad/drivers/nomad-driver-podman
+      when: mode == 'podman'
+
+    - name: Ensure Kubic repository key
+      apt_key:
+        url: https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/Debian_10/Release.key
+        state: present
+      when: mode == "podman"
+
+    - name: Ensure Kubic repository
+      apt_repository:
+        repo: 'deb https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/Debian_10/ /'
+        filename: kubic
+        update_cache: yes
+      when: mode == "podman"
+
+    - name: Ensure Docker repository key
+      apt_key:
+        url: https://download.docker.com/linux/debian/gpg
+        state: present
+      when: mode == "docker"
+
+    - name: Ensure Docker repository
+      apt_repository:
+        repo: "deb [arch=amd64] https://download.docker.com/linux/debian buster stable"
+        filename: docker
+        update_cache: yes
+      when: mode == "docker"
+
+    - name: Ensure docker packages
+      apt:
+        pkg:
+          - docker-ce
+          - docker-ce-cli
+      when: mode == "docker"
+
+    - name: Ensure podman packages
+      apt:
+        pkg:
+          - podman
+        state: latest
+      when: mode == "podman"
+
+    - name: Ensure services definition
+      template:
+        src: "templates/{{ systemd_service }}.service"
+        dest: "/etc/systemd/system/{{ systemd_service }}.service"
+        owner: root
+        group: root
+        mode: 0644
+      register: all_services
+      with_items:
+        - nomad
+        - consul
+        - vault
+      loop_control:
+        loop_var: systemd_service
+
+    - name: Ensure vault service is running
+      service:
+        name: vault
+        state: started
+      register: vault_service
+
+    - name: Write vault root token
+      shell: journalctl -u vault | grep 'Root Token' | awk '{ print $NF }' > /etc/.vault-root-token
+      args:
+        creates: /etc/.vault-root-token
+      changed_when: false
+    
+    - name: Read vault-root-token
+      shell: cat /etc/.vault-root-token
+      register: vault_root_token
+      changed_when: false
+    
+    - name: Debug
+      debug:
+        var: vault_root_token
+
+    # - name: Set fact for vault_rook_token
+    #   set_fact:
+    #       vault_root_token: "{{ vault_root_token.stdout }}" 
+      
+    - name: Ensure nomad configuration
+      template:
+        src: templates/nomad.hcl
+        dest: /etc/nomad/nomad.hcl
+        owner: root
+        group: root
+        mode: 0644
+      register: nomad_configuration
+
+    - name: Trigger systemd reload
+      shell: systemctl daemon-reload
+      when: all_services.changed
+
+    - name: Restart consul or vault if required
+      shell: systemctl restart consul
+      when: nomad_configuration.changed or vault_configuration.changed
+
+    - name: Ensure nomad service is running and enabled
+      service:
+        name: nomad
+        state: started
+        enabled: yes
+
+    - name: Ensure consul service is running and enabled
+      service:
+        name: consul
+        state: started
+        enabled: yes
+
+    - name: Ensure vault service is running and enabled
+      service:
+        name: vault
+        state: started
+        enabled: yes
+
+    - name: Ensure podman services
+      service:
+        name: "{{ cluster_service }}"
+        state: started
+        enabled: yes
+      with_items:
+        - podman
+        - io.podman
+      loop_control:
+        loop_var: cluster_service 
+      when: mode == "podman"

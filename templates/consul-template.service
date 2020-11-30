@@ -1,0 +1,11 @@
+[Unit]
+Description=Consul agent
+
+[Service]
+ExecStart=/opt/consul/bin/consul-template -consul-addr=192.168.1.100:8500 -template=/opt/consul/etc/templates/haproxy.cfg.tpl:/etc/haproxy/haproxy.cfg
+Type=exec
+User=root
+Group=root
+
+[Install]
+WantedBy=default.target

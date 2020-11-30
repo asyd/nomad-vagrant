@@ -1,0 +1,11 @@
+[Unit]
+Description=Consul agent
+
+[Service]
+ExecStart=/opt/consul/bin/consul agent -dev -ui -node machine -client '{{ ansible_eth1.ipv4.address }}'
+Type=exec
+User=root
+Group=root
+
+[Install]
+WantedBy=default.target

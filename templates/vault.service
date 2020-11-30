@@ -1,0 +1,11 @@
+[Unit]
+Description=Vault server
+
+[Service]
+ExecStart=/opt/vault/bin/vault server -dev -dev-listen-address=0.0.0.0:8200
+Type=exec
+User=root
+Group=root
+
+[Install]
+WantedBy=default.target
