@@ -110,7 +110,7 @@
     - name: Ensure happroxy is running
       service:
         name: haproxy
-        state: started
-        enabled: yes
+        state: stopped
+        enabled: no
 
 

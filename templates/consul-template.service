@@ -2,7 +2,7 @@
 Description=Consul agent
 
 [Service]
-ExecStart=/opt/consul/bin/consul-template -template=/opt/consul/etc/templates/haproxy.cfg.tpl:/etc/haproxy/haproxy.cfg
+ExecStart=/opt/consul/bin/consul-template -template=/opt/consul/etc/templates/haproxy.cfg.tpl:/etc/haproxy/haproxy.cfg -exec '/usr/sbin/haproxy -f /etc/haproxy/haproxy.cfg'
 Type=exec
 User=root
 Group=root
