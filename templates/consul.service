@@ -2,7 +2,7 @@
 Description=Consul agent
 
 [Service]
-ExecStart=/opt/consul/bin/consul agent -dev -ui -node machine -client '{{ ansible_eth1.ipv4.address }}'
+ExecStart=/opt/consul/bin/consul agent -server -ui -node {{ ansible_nodename }} --client '{{ ansible_eth1.ipv4.address }}' -bootstrap-expect=3 -bind {% raw %}'{{ GetPrivateInterfaces | include "network" "192.168.1.0/24" | attr "address" }}'{% endraw %} -data-dir=/var/lib/consul -retry-join=192.168.1.100 -retry-join=192.168.1.101 -retry-join=192.168.1.102
 Type=exec
 User=root
 Group=root

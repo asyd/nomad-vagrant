@@ -1,6 +1,69 @@
+- hosts: node-0
+  become: true
+  become_method: sudo
+
+  tasks:
+    - name: Install apt-python
+      raw: apt update && apt install -y python-apt
+      changed_when: false
+
+    - name: Install required packages
+      apt:
+        pkg:
+          - wget
+          - unzip
+          - gnupg2
+          - apt-transport-https
+          - ca-certificates
+        state: present
+
+    - name: Download and extract vault
+      shell: |
+        mkdir -p /opt/vault/bin
+        cd /opt/vault/bin
+        wget https://releases.hashicorp.com/vault/1.6.0/vault_1.6.0_linux_amd64.zip
+        unzip *.zip
+        chmod 755 vault
+        rm -fr *.zip
+      args:
+        creates: /opt/vault/bin/vault
+
+    - name: Ensure vault service definition
+      template:
+        src: "templates/vault.service"
+        dest: "/etc/systemd/system/vault.service"
+        owner: root
+        group: root
+        mode: 0644
+      register: vault_service
+
+    - name: Reload systemd
+      shell: systemctl daemon-reload
+      when: vault_service.changed
+
+    - name: Ensure vault service is running
+      service:
+        name: vault
+        state: started
+      register: vault_service
+
+    - name: Wait for vault
+      uri:
+        url: http://localhost:8200/v1/sys/health
+      register: _vault_health
+      until: _vault_health.status == 200
+      delay: 5
+
+    - name: Write vault root token
+      shell: journalctl -u vault | grep 'Root Token' | awk '{ print $NF }' > /etc/.vault-root-token
+      args:
+        creates: /etc/.vault-root-token
+      changed_when: false
+
 - hosts: ~node.*
   become: true
   become_method: sudo
+  serial: 1
   vars:
     mode: docker
 
@@ -8,6 +71,9 @@
     - name: Install apt-python
       raw: apt update && apt install -y python-apt
       changed_when: false
+
+    - name: Force gathering facts
+      gather_facts:
 
     - name: Install required packages
       apt:
@@ -61,16 +127,6 @@
         rm -fr *.zip
       args:
         creates: /opt/nomad/bin/nomad
-
-    - name: Download and extract vault
-      shell: |
-        cd /opt/vault/bin
-        wget https://releases.hashicorp.com/vault/1.6.0/vault_1.6.0_linux_amd64.zip
-        unzip *.zip
-        chmod 755 vault
-        rm -fr *.zip
-      args:
-        creates: /opt/vault/bin/vault
 
     - name: Download and extract podman plugin
       shell: |
@@ -134,35 +190,23 @@
       with_items:
         - nomad
         - consul
-        - vault
       loop_control:
         loop_var: systemd_service
 
-    - name: Ensure vault service is running
-      service:
-        name: vault
-        state: started
-      register: vault_service
-
-    - name: Write vault root token
-      shell: journalctl -u vault | grep 'Root Token' | awk '{ print $NF }' > /etc/.vault-root-token
-      args:
-        creates: /etc/.vault-root-token
-      changed_when: false
-    
     - name: Read vault-root-token
       shell: cat /etc/.vault-root-token
-      register: vault_root_token
+      register: vault_token
       changed_when: false
-    
+      delegate_to: node-0
+
+    - name: Set fact for vault_root_token
+      set_fact:
+          vault_root_token: "{{ vault_token.stdout }}"
+
     - name: Debug
       debug:
-        var: vault_root_token
-
-    # - name: Set fact for vault_rook_token
-    #   set_fact:
-    #       vault_root_token: "{{ vault_root_token.stdout }}" 
-      
+        var: "vault_root_token"
+          
     - name: Ensure nomad configuration
       template:
         src: templates/nomad.hcl
@@ -189,12 +233,6 @@
     - name: Ensure consul service is running and enabled
       service:
         name: consul
-        state: started
-        enabled: yes
-
-    - name: Ensure vault service is running and enabled
-      service:
-        name: vault
         state: started
         enabled: yes
 

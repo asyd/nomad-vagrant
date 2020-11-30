@@ -14,7 +14,14 @@ advertise {
 
 server {
   enabled          = true
-  bootstrap_expect = 1
+  bootstrap_expect = 3
+  server_join {
+    retry_join = [
+      "192.168.1.100",
+      "192.168.1.101",
+      "192.168.1.102"
+    ]
+  }
 }
 
 client {
@@ -43,5 +50,5 @@ consul {
 vault {
   enabled = true
   address = "http://192.168.1.100:8200"
-  token = "{{ vault_root_token.stdout }}"
+  token = "{{ vault_root_token }}"
 }

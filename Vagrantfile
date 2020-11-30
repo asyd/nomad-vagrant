@@ -1,7 +1,8 @@
 # vim: set syntax=ruby:
 
+N = 2
 Vagrant.configure('2') do |config|
-  (0..0).each do |it|
+  (0..N).each do |it|
     config.vm.define :"node-#{it}" do |node|
       node.vm.box = 'generic/debian10'
       node.vm.hostname = "node-#{it}"
@@ -15,8 +16,15 @@ Vagrant.configure('2') do |config|
       # node.ssh.private_key_path = ["ssh/insecure_key", "/home/asyd/.vagrant.d/insecure_private_key"]
       # node.vm.provision "file", source: "ssh/authorized_keys", destination: "~/.ssh/authorized_keys"
 
-      config.vm.provision 'ansible' do |ansible_node|
-        ansible_node.playbook = 'playbook.yml'
+      # Run ansible only when all boxes are up
+      if it == N
+        config.vm.provision 'ansible' do |ansible_node|
+          ansible_node.groups = {
+            'vault' => ['node-0'],
+            'nomad' => %w(node-0 node-1 node-2),
+          }
+          ansible_node.playbook = 'playbook.yml'
+        end
       end
     end
   end
