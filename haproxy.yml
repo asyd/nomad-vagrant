@@ -65,18 +65,27 @@
       loop_control:
         loop_var: nomad_binary
 
-    - name: Ensure consul service
+    - name: Ensure consul agent service
+      template:
+        src: "templates/consul-agent.service"
+        dest: "/etc/systemd/system/consul-agent.service"
+        owner: root
+        group: root
+        mode: 0644
+      register: consul_agent_service
+
+    - name: Ensure consul template service
       template:
         src: "templates/consul-template.service"
         dest: "/etc/systemd/system/consul-template.service"
         owner: root
         group: root
         mode: 0644
-      register: consul_service
+      register: consul_template_service
 
     - name: Reload systemd
       shell: systemctl daemon-reload
-      when: consul_service.changed
+      when: consul_template_service.changed or consul_agent_service.changed
 
     - name: Ensure haproxy consul template
       copy:
@@ -85,6 +94,12 @@
         owner: root
         group: root
         mode: 0644
+
+    - name: Ensure consul-agent is running
+      service:
+        name: consul-agent
+        state: started
+        enabled: yes
 
     - name: Ensure consul template is running
       service:

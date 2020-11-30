@@ -2,7 +2,7 @@
 Description=Consul agent
 
 [Service]
-ExecStart=/opt/consul/bin/consul agent -data-dir=/var/lib/consul -node=$HOSTNAME -bind 0.0.0.0 -config-dir=/etc/consul -retry-join 192.168.1.100
+ExecStart=/opt/consul/bin/consul agent -node {{ ansible_nodename }} -retry-join=192.168.1.100 -retry-join=192.168.1.101 -retry-join=192.168.1.102 -bind {{ ansible_eth1.ipv4.address }} -data-dir=/var/lib/consul
 Type=exec
 User=root
 Group=root
