@@ -52,6 +52,7 @@ job "example" {
 
       vault {
         policies = ["frontend"]
+        change_mode = "restart"
       }
 
       # Configuration is specific to each driver.
@@ -66,6 +67,14 @@ job "example" {
          "http.server",
          "${NOMAD_PORT_http}"
         ]
+      }
+
+      template {
+        destination = "secrets/api"
+        env = true
+        data = <<EOT
+SQL_PASSWORD="{{ with secret "secret/db/test"}}{{.Data.data.secret}}{{end}}"
+EOT
       }
 
       # Specify the maximum resources required to run the task,
