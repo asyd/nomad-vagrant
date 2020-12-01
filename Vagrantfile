@@ -2,6 +2,24 @@
 
 N = 2
 Vagrant.configure('2') do |config|
+  # The haproxy box will also be used as vault
+  config.vm.define :haproxy do |node|
+    node.vm.box = 'generic/debian10'
+    node.vm.hostname = 'haproxy'
+    node.vm.network :private_network,
+      ip: '192.168.1.10',
+      dev: 'bridge0',
+      mode: 'bridge',
+      type: 'bridge'
+
+    config.vm.provision 'ansible' do |ansible_haproxy|
+      ansible_haproxy.playbook = 'haproxy.yml'
+      ansible_haproxy.groups = {
+        'vault' => ['haproxy'],
+      }
+    end
+  end
+
   (0..N).each do |it|
     config.vm.define :"node-#{it}" do |node|
       node.vm.box = 'generic/debian10'
@@ -20,26 +38,11 @@ Vagrant.configure('2') do |config|
       if it == N
         config.vm.provision 'ansible' do |ansible_node|
           ansible_node.groups = {
-            'vault' => ['node-0'],
             'nomad' => %w(node-0 node-1 node-2),
           }
-          ansible_node.playbook = 'playbook.yml'
+          ansible_node.playbook = 'nomad.yml'
         end
       end
-    end
-  end
-
-  config.vm.define :haproxy do |node|
-    node.vm.box = 'generic/debian10'
-    node.vm.hostname = 'haproxy'
-    node.vm.network :private_network,
-      ip: '192.168.1.10',
-      dev: 'bridge0',
-      mode: 'bridge',
-      type: 'bridge'
-
-    config.vm.provision 'ansible' do |ansible_haproxy|
-      ansible_haproxy.playbook = 'haproxy.yml'
     end
   end
 end

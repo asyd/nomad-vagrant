@@ -35,6 +35,50 @@
         - /opt/consul/bin
         - /opt/consul/etc/templates
 
+    - name: Download and extract vault
+      shell: |
+        mkdir -p /opt/vault/bin
+        cd /opt/vault/bin
+        wget https://releases.hashicorp.com/vault/1.6.0/vault_1.6.0_linux_amd64.zip
+        unzip *.zip
+        chmod 755 vault
+        rm -fr *.zip
+      args:
+        creates: /opt/vault/bin/vault
+
+    - name: Ensure vault service definition
+      template:
+        src: "templates/vault.service"
+        dest: "/etc/systemd/system/vault.service"
+        owner: root
+        group: root
+        mode: 0644
+      register: vault_service
+
+
+    - name: Reload systemd
+      shell: systemctl daemon-reload
+      when: vault_service.changed
+
+    - name: Ensure vault service is running
+      service:
+        name: vault
+        state: started
+      register: vault_service
+
+    - name: Wait for vault
+      uri:
+        url: http://localhost:8200/v1/sys/health
+      register: _vault_health
+      until: _vault_health.status == 200
+      delay: 5
+
+    - name: Write vault root token
+      shell: journalctl -u vault | grep 'Root Token' | awk '{ print $NF }' > /etc/.vault-root-token
+      args:
+        creates: /etc/.vault-root-token
+      changed_when: false
+
     - name: Download and extract consul
       shell: |
         cd /opt/consul/bin
@@ -85,7 +129,7 @@
 
     - name: Reload systemd
       shell: systemctl daemon-reload
-      when: consul_template_service.changed or consul_agent_service.changed
+      when: consul_template_service.changed or consul_agent_service.changed or vault_service.changed
 
     - name: Ensure haproxy consul template
       copy:
@@ -107,7 +151,7 @@
         state: started
         enabled: yes
       
-    - name: Ensure happroxy is running
+    - name: Ensure happroxy is stopped and disabled
       service:
         name: haproxy
         state: stopped
