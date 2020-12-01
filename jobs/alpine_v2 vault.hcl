@@ -50,6 +50,10 @@ job "example" {
       # multiple drivers.
       driver = "docker"
 
+      vault {
+        policies = ["frontend"]
+      }
+
       # Configuration is specific to each driver.
       config {
         image = "python:3.8-alpine"
