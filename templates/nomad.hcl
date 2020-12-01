@@ -49,6 +49,6 @@ consul {
 
 vault {
   enabled = true
-  address = "http://192.168.1.100:8200"
+  address = "http://192.168.1.10:8200"
   token = "{{ vault_root_token }}"
 }
