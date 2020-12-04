@@ -2,7 +2,8 @@
 Description=Vault server
 
 [Service]
-ExecStart=/opt/vault/bin/vault server -dev -dev-listen-address=0.0.0.0:8200
+ExecStart=/opt/vault/bin/vault server -config=/etc/vault
+ExecStartPost=/opt/vault/bin/post-start
 Type=exec
 User=root
 Group=root

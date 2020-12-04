@@ -162,7 +162,7 @@
       when: all_services.changed
 
     - name: Restart nomad if required
-      shell: systemctl restart consul
+      shell: systemctl restart nomad
       when: nomad_configuration.changed 
 
     - name: Ensure nomad service is running and enabled

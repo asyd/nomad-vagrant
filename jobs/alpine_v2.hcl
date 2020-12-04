@@ -1,4 +1,4 @@
-job "example" {
+job "simple" {
   # Run this job as a "service" type. Each job type has different
   # properties. See the documentation below for more examples.
   type = "service"

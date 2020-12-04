@@ -52,3 +52,9 @@ vault {
   address = "http://192.168.1.10:8200"
   token = "{{ vault_root_token }}"
 }
+
+telemetry {
+  prometheus_metrics = true
+  publish_node_metrics = true
+  publish_allocation_metrics = true
+}

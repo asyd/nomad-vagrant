@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+
+export VAULT_ADDR=http://localhost:8200
+VAULT=/opt/vault/bin/vault
+VAULT_DATA=/var/lib/vault
+VAULT_POLICIES=/opt/vault/etc/policies
+
+# Ensure policies directory exists
+mkdir -p $VAULT_POLICIES
+
+# Ensure vault is started
+sleep 1 
+
+# Check if vault is initialized
+if [ ! -d "$VAULT_DATA"/sys ] ; then
+  $VAULT operator init -key-shares=1 -key-threshold=1 > /tmp/.vault-init
+  # Extract unseal key and root token
+  grep 'Unseal' /tmp/.vault-init | awk '{ print $NF }' > /etc/.vault-unseal-key
+  grep 'Root Token' /tmp/.vault-init | awk '{ print $NF }' > /etc/.vault-root-token
+  cp /etc/.vault-root-token /root/.vault-token && chmod 600 /root/.vault-token 
+fi
+
+# Unseal vault
+$VAULT operator unseal $(< /etc/.vault-unseal-key)
+
+# Apply policies
+for policy in ${VAULT_POLICIES}/*.hcl ; do
+	policy=$(basename $policy)
+  policy=${policy%.*}
+  $VAULT policy read $policy
+  if [ $? -gt 0 ] ; then
+    $VAULT policy write $policy ${VAULT_POLICIES}/$policy.hcl
+  fi
+done

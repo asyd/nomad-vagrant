@@ -6,7 +6,7 @@
 
   tasks:
     - name: Install apt-python
-      raw: apt update && apt install -y python-apt
+      raw: "[ -x /usr/bin/python ] || apt update && apt install -y python-apt"
 
     - name: Install required packages
       apt:
@@ -17,6 +17,7 @@
           - apt-transport-https
           - ca-certificates
           - haproxy
+          - python-pip
         state: present
 
     - name: Ensure required directories
@@ -31,13 +32,15 @@
         loop_var: nomad_dir
       with_items:
         - /etc/consul
+        - /etc/vault
         - /opt/consul
         - /opt/consul/bin
         - /opt/consul/etc/templates
+        - /var/lib/vault
 
     - name: Download and extract vault
       shell: |
-        mkdir -p /opt/vault/bin
+        mkdir -p /opt/vault/bin /opt/vault/etc/policies
         cd /opt/vault/bin
         wget https://releases.hashicorp.com/vault/1.6.0/vault_1.6.0_linux_amd64.zip
         unzip *.zip
@@ -45,6 +48,14 @@
         rm -fr *.zip
       args:
         creates: /opt/vault/bin/vault
+
+    - name: Ensure vault configuration
+      template:
+        src: "templates/vault.hcl"
+        dest: "/etc/vault/vault.hcl"
+        owner: "root"
+        group: "root"
+        mode: "0644"
 
     - name: Ensure vault service definition
       template:
@@ -55,6 +66,25 @@
         mode: 0644
       register: vault_service
 
+    - name: Ensure vault post-start file
+      copy:
+        src: "files/post-start"
+        dest: "/opt/vault/bin/post-start"
+        owner: "root"
+        group: "root"
+        mode: "0755"
+
+    - name: Copy frontend vault policies
+      copy:
+        src: "vault/{{ vault_policy }}.hcl"
+        dest: "/opt/vault/etc/policies/{{ vault_policy }}.hcl"
+        owner: "root"
+        group: "root"
+        mode: "0644"
+      with_items:
+        - frontend
+      loop_control:
+        loop_var: vault_policy
 
     - name: Reload systemd
       shell: systemctl daemon-reload
@@ -65,19 +95,6 @@
         name: vault
         state: started
       register: vault_service
-
-    - name: Wait for vault
-      uri:
-        url: http://localhost:8200/v1/sys/health
-      register: _vault_health
-      until: _vault_health.status == 200
-      delay: 5
-
-    - name: Write vault root token
-      shell: journalctl -u vault | grep 'Root Token' | awk '{ print $NF }' > /etc/.vault-root-token
-      args:
-        creates: /etc/.vault-root-token
-      changed_when: false
 
     - name: Download and extract consul
       shell: |
